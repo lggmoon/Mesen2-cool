@@ -143,7 +143,7 @@ protected:
 	void SetPpuMemoryMapping(uint16_t startAddr, uint16_t endAddr, uint8_t* sourceMemory, uint32_t sourceOffset, uint32_t sourceSize, int8_t accessType = -1);
 	void RemovePpuMemoryMapping(uint16_t startAddr, uint16_t endAddr);
 
-	bool HasBattery();
+	virtual bool HasBattery();
 	virtual void LoadBattery();
 	string GetBatteryFilename();
 
