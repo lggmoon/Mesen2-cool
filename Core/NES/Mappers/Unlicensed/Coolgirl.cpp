@@ -4,89 +4,155 @@
 #include "NES/NesCpu.h"
 #include "NES/NesMemoryManager.h"
 #include "NES/BaseNesPpu.h"
+#include "Utilities/Patches/IpsPatcher.h"
+#ifdef _DEBUG
+#include "Shared/MessageManager.h"
+#include <sstream>
+#include <iomanip>
+#endif
 
-static const uint8_t cfi_data[] = {
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x51, 0x52, 0x59, 0x02, 0x00, 0x40, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x27, 0x36, 0x00, 0x00, 0x06,
-	0x06, 0x09, 0x13, 0x03, 0x05, 0x03, 0x02, 0x1E,
-	0x02, 0x00, 0x06, 0x00, 0x01, 0xFF, 0x03, 0x00,
-	0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF,
-	0x50, 0x52, 0x49, 0x31, 0x33, 0x14, 0x02, 0x01,
-	0x00, 0x08, 0x00, 0x00, 0x02, 0xB5, 0xC5, 0x05,
-	0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+static const uint8_t cfi_data_expanded[] = {
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x51, 0x51, 0x52, 0x52, 0x59, 0x59, 0x02, 0x02, 0x00, 0x00, 0x40, 0x40, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x27, 0x27, 0x36, 0x36, 0x00, 0x00, 0x00, 0x00, 0x06, 0x06,
+	0x06, 0x06, 0x09, 0x09, 0x13, 0x13, 0x03, 0x03, 0x05, 0x05, 0x03, 0x03, 0x02, 0x02, 0x1E, 0x1E,
+	0x02, 0x02, 0x00, 0x00, 0x06, 0x06, 0x00, 0x00, 0x01, 0x01, 0xFF, 0xFF, 0x03, 0x03, 0x00, 0x00,
+	0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0x50, 0x50, 0x52, 0x52, 0x49, 0x49, 0x31, 0x31, 0x33, 0x33, 0x14, 0x14, 0x02, 0x02, 0x01, 0x01,
+	0x00, 0x00, 0x08, 0x08, 0x00, 0x00, 0x00, 0x00, 0x02, 0x02, 0xB5, 0xB5, 0xC5, 0xC5, 0x05, 0x05,
+	0x01, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
 };
+
+Coolgirl::BitSpecEntry* Coolgirl::GetBitSpec(const char* bitsStr)
+{
+	for (int i = 0; i < _bitCacheCount; i++) {
+		if (strcmp(_bitCache[i].key, bitsStr) == 0) {
+			return &_bitCache[i];
+		}
+	}
+
+	BitSpecEntry* entry = &_bitCache[_bitCacheCount++];
+	entry->key = bitsStr;
+
+	uint8_t bit1, bit2, count = 0;
+	for (int i = 0; i < 32; i++)
+		entry->bits[i] = -1;
+	const char* p = bitsStr;
+	while (*p) {
+		bit1 = 0;
+		bit2 = 0;
+		if (isdigit(*p)) {
+			while (isdigit(*p)) {
+				bit1 *= 10;
+				bit1 += *p - '0';
+				p++;
+			}
+			if (*p == ':') {
+				p++;
+				while (isdigit(*p)) {
+					bit2 *= 10;
+					bit2 += *p - '0';
+					p++;
+				}
+				if (bit2 < bit1)
+					for (int i = bit1; i >= (int)bit2; i--) { entry->bits[count] = i; count++; }
+				else
+					for (int i = bit1; i <= (int)bit2; i++) { entry->bits[count] = i; count++; }
+			} else {
+				entry->bits[count] = bit1;
+				count++;
+			}
+		} else {
+			p++;
+		}
+	}
+	entry->count = count;
+
+	bool contiguous = (count > 0);
+	if (contiguous) {
+		int high = entry->bits[0];
+		int low = entry->bits[count - 1];
+		if (high >= low && high - low + 1 == count) {
+			for (int i = 0; i < count; i++) {
+				if (entry->bits[i] != high - i) {
+					contiguous = false;
+					break;
+				}
+			}
+		} else {
+			contiguous = false;
+		}
+	}
+
+	entry->isContiguous = contiguous;
+	if (contiguous) {
+		entry->shift = entry->bits[count - 1];
+		entry->mask = (1u << count) - 1;
+		entry->posMask = entry->mask << entry->shift;
+	} else {
+		entry->shift = 0;
+		entry->mask = (1u << count) - 1;
+		entry->posMask = 0;
+		for (int i = 0; i < count; i++) {
+			entry->posMask |= (1u << entry->bits[i]);
+		}
+	}
+
+	return entry;
+}
+
+#define GET_BITS(value, bitsStr) GetBits(value, bitsStr)
+#define SET_BITS(target, target_bits, source, source_bits) target = SetBits(target, target_bits, GetBits(source, source_bits))
 
 Coolgirl::Coolgirl()
 {
 }
 
-uint8_t Coolgirl::StringToBits(const char* bitsStr, int* bits)
-{
-	uint8_t bit1, bit2, count = 0;
-	for (int i = 0; i < 32; i++)
-		bits[i] = -1;
-	while (*bitsStr) {
-		bit1 = 0;
-		bit2 = 0;
-		if (isdigit(*bitsStr)) {
-			while (isdigit(*bitsStr)) {
-				bit1 *= 10;
-				bit1 += *bitsStr - '0';
-				bitsStr++;
-			}
-			if (*bitsStr == ':') {
-				bitsStr++;
-				while (isdigit(*bitsStr)) {
-					bit2 *= 10;
-					bit2 += *bitsStr - '0';
-					bitsStr++;
-				}
-				if (bit2 < bit1)
-					for (int i = bit1; i >= (int)bit2; i--) { bits[count] = i; count++; }
-				else
-					for (int i = bit1; i <= (int)bit2; i++) { bits[count] = i; count++; }
-			} else {
-				bits[count] = bit1;
-				count++;
-			}
-		} else {
-			bitsStr++;
-		}
-	}
-	return count;
-}
-
 uint32_t Coolgirl::GetBits(uint32_t value, const char* bitsStr)
 {
+	BitSpecEntry* spec = GetBitSpec(bitsStr);
+	if (spec->isContiguous) {
+		return (value >> spec->shift) & spec->mask;
+	}
 	uint32_t result = 0;
-	int bits[32];
-	StringToBits(bitsStr, bits);
-	for (int i = 0; bits[i] >= 0; i++) {
+	for (int i = 0; i < spec->count; i++) {
 		result <<= 1;
-		result |= (value >> bits[i]) & 1;
+		result |= (value >> spec->bits[i]) & 1;
 	}
 	return result;
 }
 
 uint32_t Coolgirl::SetBits(uint32_t value, const char* bitsStr, uint32_t newValue)
 {
-	int bits[32];
-	uint8_t count = StringToBits(bitsStr, bits);
-	for (int i = 0; i < count; i++) {
-		if ((newValue >> (count - i - 1)) & 1)
-			value |= 1u << bits[i];
+	BitSpecEntry* spec = GetBitSpec(bitsStr);
+	if (spec->isContiguous) {
+		return (value & ~spec->posMask) | ((newValue & spec->mask) << spec->shift);
+	}
+	for (int i = 0; i < spec->count; i++) {
+		if ((newValue >> (spec->count - i - 1)) & 1)
+			value |= 1u << spec->bits[i];
 		else
-			value &= ~(1u << bits[i]);
+			value &= ~(1u << spec->bits[i]);
 	}
 	return value;
+}
+
+void Coolgirl::MapPrgBank(uint16_t start, uint16_t end, uint32_t mappedBank)
+{
+	constexpr uint32_t FLASH_START_BANK = 0x20000 - SAVE_FLASH_SIZE / 0x2000;
+	if (_saveFlash.size() > 0 && mappedBank >= FLASH_START_BANK) {
+		uint32_t flashOffset = (mappedBank - FLASH_START_BANK) * 0x2000;
+		SetCpuMemoryMapping(start, end, _saveFlash.data(), flashOffset, _saveFlash.size(), MemoryAccessType::ReadWrite);
+	} else {
+		SetCpuMemoryMapping(start, end, PrgMemoryType::PrgRom, mappedBank * 0x2000, MemoryAccessType::Read);
+	}
 }
 
 void Coolgirl::SyncPrg()
@@ -97,85 +163,38 @@ void Coolgirl::SyncPrg()
 	_prgBankCMapped = (_prgBase >> 13) | (_prgBankC & ((~(_prgMask >> 13) & 0xFE) | 1));
 	_prgBankDMapped = (_prgBase >> 13) | (_prgBankD & ((~(_prgMask >> 13) & 0xFE) | 1));
 
-	int regAChip = (_saveFlash.size() > 0 && _prgBankAMapped >= 0x20000 - SAVE_FLASH_SIZE / 1024 / 8) ? FLASH_CHIP : ROM_CHIP;
-	int regBChip = (_saveFlash.size() > 0 && _prgBankBMapped >= 0x20000 - SAVE_FLASH_SIZE / 1024 / 8) ? FLASH_CHIP : ROM_CHIP;
-	int regCChip = (_saveFlash.size() > 0 && _prgBankCMapped >= 0x20000 - SAVE_FLASH_SIZE / 1024 / 8) ? FLASH_CHIP : ROM_CHIP;
-	int regDChip = (_saveFlash.size() > 0 && _prgBankDMapped >= 0x20000 - SAVE_FLASH_SIZE / 1024 / 8) ? FLASH_CHIP : ROM_CHIP;
-
 	if (!_cfiMode || _saveFlash.size() == 0) {
 		switch (_prgMode & 7) {
 		default:
 		case 0:
-			if (regAChip == FLASH_CHIP && _saveFlash.size() > 0)
-				SetCpuMemoryMapping(0x8000, 0xBFFF, _saveFlash.data(), _prgBankAMapped * 0x2000, _saveFlash.size(), MemoryAccessType::Read);
-			else
-				SetCpuMemoryMapping(0x8000, 0xBFFF, PrgMemoryType::PrgRom, _prgBankAMapped * 0x2000, MemoryAccessType::Read);
-			if (regCChip == FLASH_CHIP && _saveFlash.size() > 0)
-				SetCpuMemoryMapping(0xC000, 0xFFFF, _saveFlash.data(), _prgBankCMapped * 0x2000, _saveFlash.size(), MemoryAccessType::Read);
-			else
-				SetCpuMemoryMapping(0xC000, 0xFFFF, PrgMemoryType::PrgRom, _prgBankCMapped * 0x2000, MemoryAccessType::Read);
+			MapPrgBank(0x8000, 0xBFFF, _prgBankAMapped);
+			MapPrgBank(0xC000, 0xFFFF, _prgBankCMapped);
 			break;
 		case 1:
-			if (regCChip == FLASH_CHIP && _saveFlash.size() > 0)
-				SetCpuMemoryMapping(0x8000, 0xBFFF, _saveFlash.data(), _prgBankCMapped * 0x2000, _saveFlash.size(), MemoryAccessType::Read);
-			else
-				SetCpuMemoryMapping(0x8000, 0xBFFF, PrgMemoryType::PrgRom, _prgBankCMapped * 0x2000, MemoryAccessType::Read);
-			if (regAChip == FLASH_CHIP && _saveFlash.size() > 0)
-				SetCpuMemoryMapping(0xC000, 0xFFFF, _saveFlash.data(), _prgBankAMapped * 0x2000, _saveFlash.size(), MemoryAccessType::Read);
-			else
-				SetCpuMemoryMapping(0xC000, 0xFFFF, PrgMemoryType::PrgRom, _prgBankAMapped * 0x2000, MemoryAccessType::Read);
+			MapPrgBank(0x8000, 0xBFFF, _prgBankCMapped);
+			MapPrgBank(0xC000, 0xFFFF, _prgBankAMapped);
 			break;
 		case 4:
-			if (regAChip == FLASH_CHIP && _saveFlash.size() > 0)
-				SetCpuMemoryMapping(0x8000, 0x9FFF, _saveFlash.data(), _prgBankAMapped * 0x2000, _saveFlash.size(), MemoryAccessType::Read);
-			else
-				SetCpuMemoryMapping(0x8000, 0x9FFF, PrgMemoryType::PrgRom, _prgBankAMapped * 0x2000, MemoryAccessType::Read);
-			if (regBChip == FLASH_CHIP && _saveFlash.size() > 0)
-				SetCpuMemoryMapping(0xA000, 0xBFFF, _saveFlash.data(), _prgBankBMapped * 0x2000, _saveFlash.size(), MemoryAccessType::Read);
-			else
-				SetCpuMemoryMapping(0xA000, 0xBFFF, PrgMemoryType::PrgRom, _prgBankBMapped * 0x2000, MemoryAccessType::Read);
-			if (regCChip == FLASH_CHIP && _saveFlash.size() > 0)
-				SetCpuMemoryMapping(0xC000, 0xDFFF, _saveFlash.data(), _prgBankCMapped * 0x2000, _saveFlash.size(), MemoryAccessType::Read);
-			else
-				SetCpuMemoryMapping(0xC000, 0xDFFF, PrgMemoryType::PrgRom, _prgBankCMapped * 0x2000, MemoryAccessType::Read);
-			if (regDChip == FLASH_CHIP && _saveFlash.size() > 0)
-				SetCpuMemoryMapping(0xE000, 0xFFFF, _saveFlash.data(), _prgBankDMapped * 0x2000, _saveFlash.size(), MemoryAccessType::Read);
-			else
-				SetCpuMemoryMapping(0xE000, 0xFFFF, PrgMemoryType::PrgRom, _prgBankDMapped * 0x2000, MemoryAccessType::Read);
+			MapPrgBank(0x8000, 0x9FFF, _prgBankAMapped);
+			MapPrgBank(0xA000, 0xBFFF, _prgBankBMapped);
+			MapPrgBank(0xC000, 0xDFFF, _prgBankCMapped);
+			MapPrgBank(0xE000, 0xFFFF, _prgBankDMapped);
 			break;
 		case 5:
-			if (regCChip == FLASH_CHIP && _saveFlash.size() > 0)
-				SetCpuMemoryMapping(0x8000, 0x9FFF, _saveFlash.data(), _prgBankCMapped * 0x2000, _saveFlash.size(), MemoryAccessType::Read);
-			else
-				SetCpuMemoryMapping(0x8000, 0x9FFF, PrgMemoryType::PrgRom, _prgBankCMapped * 0x2000, MemoryAccessType::Read);
-			if (regBChip == FLASH_CHIP && _saveFlash.size() > 0)
-				SetCpuMemoryMapping(0xA000, 0xBFFF, _saveFlash.data(), _prgBankBMapped * 0x2000, _saveFlash.size(), MemoryAccessType::Read);
-			else
-				SetCpuMemoryMapping(0xA000, 0xBFFF, PrgMemoryType::PrgRom, _prgBankBMapped * 0x2000, MemoryAccessType::Read);
-			if (regAChip == FLASH_CHIP && _saveFlash.size() > 0)
-				SetCpuMemoryMapping(0xC000, 0xDFFF, _saveFlash.data(), _prgBankAMapped * 0x2000, _saveFlash.size(), MemoryAccessType::Read);
-			else
-				SetCpuMemoryMapping(0xC000, 0xDFFF, PrgMemoryType::PrgRom, _prgBankAMapped * 0x2000, MemoryAccessType::Read);
-			if (regDChip == FLASH_CHIP && _saveFlash.size() > 0)
-				SetCpuMemoryMapping(0xE000, 0xFFFF, _saveFlash.data(), _prgBankDMapped * 0x2000, _saveFlash.size(), MemoryAccessType::Read);
-			else
-				SetCpuMemoryMapping(0xE000, 0xFFFF, PrgMemoryType::PrgRom, _prgBankDMapped * 0x2000, MemoryAccessType::Read);
+			MapPrgBank(0x8000, 0x9FFF, _prgBankCMapped);
+			MapPrgBank(0xA000, 0xBFFF, _prgBankBMapped);
+			MapPrgBank(0xC000, 0xDFFF, _prgBankAMapped);
+			MapPrgBank(0xE000, 0xFFFF, _prgBankDMapped);
 			break;
 		case 6:
-			if (regBChip == FLASH_CHIP && _saveFlash.size() > 0)
-				SetCpuMemoryMapping(0x8000, 0xFFFF, _saveFlash.data(), (_prgBankBMapped >> 2) * 0x8000, _saveFlash.size(), MemoryAccessType::Read);
-			else
-				SetCpuMemoryMapping(0x8000, 0xFFFF, PrgMemoryType::PrgRom, (_prgBankBMapped >> 2) * 0x8000, MemoryAccessType::Read);
+			MapPrgBank(0x8000, 0xFFFF, _prgBankBMapped & ~3u);
 			break;
 		case 7:
-			if (regAChip == FLASH_CHIP && _saveFlash.size() > 0)
-				SetCpuMemoryMapping(0x8000, 0xFFFF, _saveFlash.data(), (_prgBankAMapped >> 2) * 0x8000, _saveFlash.size(), MemoryAccessType::Read);
-			else
-				SetCpuMemoryMapping(0x8000, 0xFFFF, PrgMemoryType::PrgRom, (_prgBankAMapped >> 2) * 0x8000, MemoryAccessType::Read);
+			MapPrgBank(0x8000, 0xFFFF, _prgBankAMapped & ~3u);
 			break;
 		}
 	} else {
-		SetCpuMemoryMapping(0x8000, 0xFFFF, _cfiData.data(), 0, _cfiData.size(), MemoryAccessType::Read);
+		SetCpuMemoryMapping(0x8000, 0xFFFF, (uint8_t*)cfi_data_expanded, 0, sizeof(cfi_data_expanded), MemoryAccessType::Read);
 	}
 
 	if (!_mapRomOn6000 && _wram.size() > 0 && _sramEnabled) {
@@ -187,73 +206,103 @@ void Coolgirl::SyncPrg()
 	}
 }
 
+uint16_t Coolgirl::ApplyChrMask(uint32_t chrMask, uint16_t bank)
+{
+	uint16_t mask = (uint16_t)(chrMask >> 10);
+	return bank & (~mask | 0x0007);
+}
+
 void Coolgirl::SyncChr()
 {
 	int chrShiftRight = ((_mapper == CgMapper::VRC2_VRC4) && (_flags & 0b010)) ? 1 : 0;
 	int chrShiftLeft = 0;
 
+	uint16_t bankA = ApplyChrMask(_chrMask, _chrBankA);
+	uint16_t bankB = ApplyChrMask(_chrMask, _chrBankB);
+	uint16_t bankC = ApplyChrMask(_chrMask, _chrBankC);
+	uint16_t bankD = ApplyChrMask(_chrMask, _chrBankD);
+	uint16_t bankE = ApplyChrMask(_chrMask, _chrBankE);
+	uint16_t bankF = ApplyChrMask(_chrMask, _chrBankF);
+	uint16_t bankG = ApplyChrMask(_chrMask, _chrBankG);
+	uint16_t bankH = ApplyChrMask(_chrMask, _chrBankH);
+
+#ifdef _DEBUG
+	if (needLogSyncChr) {
+		std::stringstream ss;
+		ss << "[Coolgirl] SyncChr: chrMode=" << (int)(_chrMode & 7)
+		   << " mapper=" << (int)_mapper
+		   << " chrMask=0x" << std::hex << _chrMask << std::dec
+		   << " bankA=" << (int)bankA << " bankC=" << (int)bankC
+		   << " bankE=" << (int)bankE << " bankF=" << (int)bankF
+		   << " canWriteChr=" << (int)_canWriteChr;
+		LogDebug(ss.str());
+	}
+#endif
+
 	switch (_chrMode & 7) {
 	default:
-	case 0: SelectChrPage8x(0, _chrBankA >> 3 << 3 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam); break;
+	case 0:
+		SelectChrPage8x(0, _chrBankA >> 3 << 3 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam); break;
 	case 1:
 		SelectChrPage4x(0, _mapper163Latch >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
 		SelectChrPage4x(1, _mapper163Latch >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
 		break;
 	case 2:
-		SelectChrPage2x(0, _chrBankA >> 1 << 1 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage2x(0, bankA >> 1 << 1 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
 		_tksMir[0] = _tksMir[1] = (uint8_t)_chrBankA;
-		SelectChrPage2x(1, _chrBankC >> 1 << 1 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage2x(1, bankC >> 1 << 1 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
 		_tksMir[2] = _tksMir[3] = (uint8_t)_chrBankC;
-		SelectChrPage(4, _chrBankE >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage(4, bankE >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
 		_tksMir[4] = (uint8_t)_chrBankE;
-		SelectChrPage(5, _chrBankF >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage(5, bankF >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
 		_tksMir[5] = (uint8_t)_chrBankF;
-		SelectChrPage(6, _chrBankG >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage(6, bankG >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
 		_tksMir[6] = (uint8_t)_chrBankG;
-		SelectChrPage(7, _chrBankH >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage(7, bankH >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
 		_tksMir[7] = (uint8_t)_chrBankH;
 		break;
 	case 3:
-		SelectChrPage(0, _chrBankE >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage(0, bankE >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
 		_tksMir[0] = (uint8_t)_chrBankE;
-		SelectChrPage(1, _chrBankF >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage(1, bankF >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
 		_tksMir[1] = (uint8_t)_chrBankF;
-		SelectChrPage(2, _chrBankG >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage(2, bankG >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
 		_tksMir[2] = (uint8_t)_chrBankG;
-		SelectChrPage(3, _chrBankH >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage(3, bankH >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
 		_tksMir[3] = (uint8_t)_chrBankH;
-		SelectChrPage2x(2, _chrBankA >> 1 << 1 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage2x(2, bankA >> 1 << 1 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
 		_tksMir[4] = _tksMir[5] = (uint8_t)_chrBankA;
-		SelectChrPage2x(3, _chrBankC >> 1 << 1 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage2x(3, bankC >> 1 << 1 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
 		_tksMir[6] = _tksMir[7] = (uint8_t)_chrBankC;
 		break;
 	case 4:
-		SelectChrPage4x(0, _chrBankA >> 2 << 2 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
-		SelectChrPage4x(1, _chrBankE >> 2 << 2 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage4x(0, bankA >> 2 << 2 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage4x(1, bankE >> 2 << 2 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
 		break;
 	case 5:
-		if (!_ppuLatch0) SelectChrPage4x(0, _chrBankA >> 2 << 2 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
-		else SelectChrPage4x(0, _chrBankB >> 2 << 2 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
-		if (!_ppuLatch1) SelectChrPage4x(1, _chrBankE >> 2 << 2 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
-		else SelectChrPage4x(1, _chrBankF >> 2 << 2 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		if (!_ppuLatch0) SelectChrPage4x(0, bankA >> 2 << 2 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		else SelectChrPage4x(0, bankB >> 2 << 2 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		if (!_ppuLatch1) SelectChrPage4x(1, bankE >> 2 << 2 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		else SelectChrPage4x(1, bankF >> 2 << 2 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
 		break;
 	case 6:
-		SelectChrPage2x(0, _chrBankA >> 1 << 1 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
-		SelectChrPage2x(1, _chrBankC >> 1 << 1 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
-		SelectChrPage2x(2, _chrBankE >> 1 << 1 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
-		SelectChrPage2x(3, _chrBankG >> 1 << 1 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage2x(0, bankA >> 1 << 1 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage2x(1, bankC >> 1 << 1 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage2x(2, bankE >> 1 << 1 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage2x(3, bankG >> 1 << 1 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
 		break;
 	case 7:
-		SelectChrPage(0, _chrBankA >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
-		SelectChrPage(1, _chrBankB >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
-		SelectChrPage(2, _chrBankC >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
-		SelectChrPage(3, _chrBankD >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
-		SelectChrPage(4, _chrBankE >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
-		SelectChrPage(5, _chrBankF >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
-		SelectChrPage(6, _chrBankG >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
-		SelectChrPage(7, _chrBankH >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage(0, bankA >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage(1, bankB >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage(2, bankC >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage(3, bankD >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage(4, bankE >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage(5, bankF >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage(6, bankG >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
+		SelectChrPage(7, bankH >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
 		break;
 	}
+	needLogSyncChr = false; // Allow logging again on next reset
 }
 
 void Coolgirl::SyncMirroring()
@@ -294,7 +343,7 @@ void Coolgirl::FlashWrite(uint16_t addr, uint8_t value)
 			(_flashBufferV[5] == 0x30)) {
 			int sector = _prgBankAMapped * 0x2000 / FLASH_SECTOR_SIZE;
 			uint32_t sectorAddress = sector * FLASH_SECTOR_SIZE;
-			for (uint32_t i = sectorAddress; i < sectorAddress + FLASH_SECTOR_SIZE && i < _saveFlash.size(); i++)
+			for (uint32_t i = sectorAddress; i < sectorAddress + FLASH_SECTOR_SIZE; i++)
 				_saveFlash[i % SAVE_FLASH_SIZE] = 0xFF;
 			_flashState = 0;
 		}
@@ -303,7 +352,7 @@ void Coolgirl::FlashWrite(uint16_t addr, uint8_t value)
 			(_flashBufferA[1] == 0x0555) && (_flashBufferV[1] == 0x55) &&
 			(_flashBufferA[2] == 0x0AAA) && (_flashBufferV[2] == 0xA0)) {
 			uint32_t flashAddr = _prgBankAMapped * 0x2000 + (addr % 0x8000);
-			if (_saveFlash.size() > 0 && flashAddr < _saveFlash.size()) {
+			if (_saveFlash.size() > 0) {
 				if (_saveFlash[flashAddr % SAVE_FLASH_SIZE] == 0xFF)
 					_saveFlash[flashAddr % SAVE_FLASH_SIZE] = value;
 			}
@@ -324,9 +373,10 @@ void Coolgirl::HandleSubMapperLogic(uint16_t addr, uint8_t value)
 	uint16_t A = addr;
 	uint8_t V = value;
 
-	if (_mapper == CgMapper::Passthrough) return;
+	switch (_mapper) {
+	case CgMapper::Passthrough: return;
 
-	if (_mapper == CgMapper::UxROM) {
+	case CgMapper::UxROM: {
 		if (!(_flags & 1) || (GetBits(A, "14:12") != 0b001)) {
 			SET_BITS(_prgBankA, "5:1", V, "4:0");
 			if (_flags & 2) {
@@ -338,29 +388,29 @@ void Coolgirl::HandleSubMapperLogic(uint16_t addr, uint8_t value)
 			SET_BITS(_mirroring, "1", 1, "0");
 			SET_BITS(_mirroring, "0", V, "4");
 		}
-	}
+	} break;
 
-	if (_mapper == CgMapper::CNROM) {
+	case CgMapper::CNROM: {
 		SET_BITS(_chrBankA, "7:3", V, "4:0");
-	}
+	} break;
 
-	if (_mapper == CgMapper::HolyDiver) {
+	case CgMapper::HolyDiver: {
 		SET_BITS(_prgBankA, "3:1", V, "2:0");
 		SET_BITS(_chrBankA, "6:3", V, "7:4");
 		_mirroring = GetBits(V, "3") ^ 1;
-	}
+	} break;
 
-	if (_mapper == CgMapper::TAM_S1) {
+	case CgMapper::TAM_S1: {
 		SET_BITS(_prgBankA, "5:1", V, "4:0");
 		_mirroring = GetBits(V, "7") ^ 1;
-	}
+	} break;
 
-	if (_mapper == CgMapper::Sunsoft2) {
+	case CgMapper::Sunsoft2: {
 		SET_BITS(_prgBankA, "3:1", V, "6:4");
 		_canWriteChr = V & 1;
-	}
+	} break;
 
-	if (_mapper == CgMapper::Mapper163) {
+	case CgMapper::Mapper163: {
 		switch (GetBits(A, "14:8") & 0x77) {
 		case 0x11:
 			_mapper163R0 = V; break;
@@ -387,9 +437,9 @@ void Coolgirl::HandleSubMapperLogic(uint16_t addr, uint8_t value)
 		case 0x46:
 			_sramEnabled = V & 1; break;
 		}
-	}
+	} break;
 
-	if (_mapper == CgMapper::SS88006) {
+	case CgMapper::SS88006: {
 		switch (GetBits(A, "14:12,1:0")) {
 		case 0b00000: SET_BITS(_prgBankA, "3:0", V, "3:0"); break;
 		case 0b00001: SET_BITS(_prgBankA, "7:4", V, "3:0"); break;
@@ -435,38 +485,38 @@ void Coolgirl::HandleSubMapperLogic(uint16_t addr, uint8_t value)
 			break;
 		case 0b11111: break;
 		}
-	}
+	} break;
 
-	if (_mapper == CgMapper::AxROM) {
+	case CgMapper::AxROM: {
 		SET_BITS(_prgBankA, "5:2", V, "3:0");
 		if (!(_flags & 1))
 			_mirroring = (1 << 1) | GetBits(V, "4");
-	}
+	} break;
 
-	if (_mapper == CgMapper::Cheetahmen2) {
+	case CgMapper::Cheetahmen2: {
 		SET_BITS(_prgBankA, "5:2", A, "10:7");
 		SET_BITS(_chrBankA, "7:5", A, "2:0");
 		SET_BITS(_chrBankA, "4:3", V, "1:0");
 		_mirroring = GetBits(A, "13");
-	}
+	} break;
 
-	if (_mapper == CgMapper::ColorDreams) {
+	case CgMapper::ColorDreams: {
 		SET_BITS(_prgBankA, "3:2", V, "1:0");
 		SET_BITS(_chrBankA, "6:3", V, "7:4");
-	}
+	} break;
 
-	if (_mapper == CgMapper::GxROM) {
+	case CgMapper::GxROM: {
 		SET_BITS(_prgBankA, "3:2", V, "5:4");
 		SET_BITS(_chrBankA, "4:3", V, "1:0");
-	}
+	} break;
 
-	if (_mapper == CgMapper::Mapper87) {
+	case CgMapper::Mapper87: {
 		if (GetBits(A, "14:13") == 0b11) {
 			SET_BITS(_chrBankA, "4:3", V, "0,1");
 		}
-	}
+	} break;
 
-	if (_mapper == CgMapper::JY) {
+	case CgMapper::JY: {
 		if (GetBits(A, "14:12") == 0b000) {
 			switch (GetBits(A, "1:0")) {
 			case 0b00: SET_BITS(_prgBankA, "5:0", V, "5:0"); break;
@@ -513,9 +563,9 @@ void Coolgirl::HandleSubMapperLogic(uint16_t addr, uint8_t value)
 		}
 		if (A == 0x5800) _mul1 = V;
 		if (A == 0x5801) _mul2 = V;
-	}
+	} break;
 
-	if (_mapper == CgMapper::H3001) {
+	case CgMapper::H3001: {
 		switch (GetBits(A, "14:12,2:0")) {
 		case 0b000000: SET_BITS(_prgBankA, "5:0", V, "5:0"); break;
 		case 0b001001: _mirroring = GetBits(V, "7"); break;
@@ -540,9 +590,9 @@ void Coolgirl::HandleSubMapperLogic(uint16_t addr, uint8_t value)
 		case 0b011111: SET_BITS(_chrBankH, "7:0", V, "7:0"); break;
 		case 0b100000: SET_BITS(_prgBankC, "5:0", V, "5:0"); break;
 		}
-	}
+	} break;
 
-	if (_mapper == CgMapper::MMC5) {
+	case CgMapper::MMC5: {
 		switch (GetBits(A, "14:13")) {
 		case 0b00:
 			SET_BITS(_prgBankA, "6:0", V, "6:0"); break;
@@ -560,13 +610,13 @@ void Coolgirl::HandleSubMapperLogic(uint16_t addr, uint8_t value)
 		if (A == 0x5105) SET_BITS(_mirroring, "1:0", V, "1:0");
 		if (A == 0x5203) _mmc5IrqLine = V;
 		if (A == 0x5204) _mmc5IrqEnabled = GetBits(V, "7");
-	}
+	} break;
 
-	if (_mapper == CgMapper::MMC1) {
+	case CgMapper::MMC1: {
 		if (V & 0x80) {
-			_mmc1LoadRegister = SetBits(_mmc1LoadRegister, "5:0", 100000);
+			_mmc1LoadRegister = SetBits(_mmc1LoadRegister, "5:0", 0b100000);
 			_prgMode = 0;
-			_prgBankC = SetBits(_prgBankC, "4:0", 11110);
+			_prgBankC = SetBits(_prgBankC, "4:0", 0b11110);
 		} else {
 			SET_BITS(_mmc1LoadRegister, "4:0", _mmc1LoadRegister, "5:1");
 			_mmc1LoadRegister = SetBits(_mmc1LoadRegister, "5", GetBits(V, "0"));
@@ -575,10 +625,10 @@ void Coolgirl::HandleSubMapperLogic(uint16_t addr, uint8_t value)
 				case 0b00:
 					if (GetBits(_mmc1LoadRegister, "4:3") == 0b11) {
 						_prgMode = 0;
-						_prgBankC = SetBits(_prgBankC, "4:1", 1111);
+						_prgBankC = SetBits(_prgBankC, "4:1", 0b1111);
 					} else if (GetBits(_mmc1LoadRegister, "4:3") == 0b10) {
 						_prgMode = 0b001;
-						_prgBankC = SetBits(_prgBankC, "4:1", 0000);
+						_prgBankC = SetBits(_prgBankC, "4:1", 0);
 					} else {
 						_prgMode = 0b111;
 					}
@@ -606,9 +656,9 @@ void Coolgirl::HandleSubMapperLogic(uint16_t addr, uint8_t value)
 				_mmc1LoadRegister = 0b100000;
 			}
 		}
-	}
+	} break;
 
-	if (_mapper == CgMapper::MMC2_MMC4) {
+	case CgMapper::MMC2_MMC4: {
 		switch ((A >> 12) & 7) {
 		case 2:
 			if (!(_flags & 1)) SET_BITS(_prgBankA, "3:0", V, "3:0");
@@ -620,18 +670,18 @@ void Coolgirl::HandleSubMapperLogic(uint16_t addr, uint8_t value)
 		case 6: SET_BITS(_chrBankF, "6:2", V, "4:0"); break;
 		case 7: _mirroring = V & 1; break;
 		}
-	}
+	} break;
 
-	if (_mapper == CgMapper::Bandai152) {
+	case CgMapper::Bandai152: {
 		SET_BITS(_chrBankA, "6:3", V, "3:0");
 		SET_BITS(_prgBankA, "3:1", V, "6:4");
 		if (_flags & 1)
 			_mirroring = 2 | GetBits(V, "7");
 		else
 			SET_BITS(_prgBankA, "4", V, "7");
-	}
+	} break;
 
-	if (_mapper == CgMapper::VRC3) {
+	case CgMapper::VRC3: {
 		switch (GetBits(A, "14:12")) {
 		case 0b000: SET_BITS(_vrc3IrqLatch, "3:0", V, "3:0"); break;
 		case 0b001: SET_BITS(_vrc3IrqLatch, "7:4", V, "3:0"); break;
@@ -650,9 +700,9 @@ void Coolgirl::HandleSubMapperLogic(uint16_t addr, uint8_t value)
 		case 0b110: break;
 		case 0b111: SET_BITS(_prgBankA, "3:1", V, "2:0"); break;
 		}
-	}
+	} break;
 
-	if (_mapper == CgMapper::MMC3_MMC6) {
+	case CgMapper::MMC3_MMC6: {
 		switch (GetBits(A, "14:13,0")) {
 		case 0b000:
 			SET_BITS(_mmc3Internal, "2:0", V, "2:0");
@@ -689,29 +739,29 @@ void Coolgirl::HandleSubMapperLogic(uint16_t addr, uint8_t value)
 			if (!(_flags & 4)) _mmc3IrqEnabled = 1;
 			break;
 		}
-	}
+	} break;
 
-	if (_mapper == CgMapper::Mapper112) {
-		switch (GetBits(A, "14:13")) {
-		case 0b00: SET_BITS(_mapper112Internal, "2:0", V, "2:0"); break;
-		case 0b01:
-			switch (GetBits(_mapper112Internal, "2:0")) {
-			case 0b000: SET_BITS(_prgBankA, "5:0", V, "5:0"); break;
-			case 0b001: SET_BITS(_prgBankB, "5:0", V, "5:0"); break;
-			case 0b010: SET_BITS(_chrBankA, "7:0", V, "7:0"); break;
-			case 0b011: SET_BITS(_chrBankC, "7:0", V, "7:0"); break;
-			case 0b100: SET_BITS(_chrBankE, "7:0", V, "7:0"); break;
-			case 0b101: SET_BITS(_chrBankF, "7:0", V, "7:0"); break;
-			case 0b110: SET_BITS(_chrBankG, "7:0", V, "7:0"); break;
-			case 0b111: SET_BITS(_chrBankH, "7:0", V, "7:0"); break;
-			}
+	case CgMapper::Mapper112:{
+		switch (GetBits(A, "14:13")){
+			case 0b00: SET_BITS(_mapper112Internal, "2:0", V, "2:0"); break;
+			case 0b01:
+				switch (GetBits(_mapper112Internal, "2:0")) {
+				case 0b000: SET_BITS(_prgBankA, "5:0", V, "5:0"); break;
+				case 0b001: SET_BITS(_prgBankB, "5:0", V, "5:0"); break;
+				case 0b010: SET_BITS(_chrBankA, "7:0", V, "7:0"); break;
+				case 0b011: SET_BITS(_chrBankC, "7:0", V, "7:0"); break;
+				case 0b100: SET_BITS(_chrBankE, "7:0", V, "7:0"); break;
+				case 0b101: SET_BITS(_chrBankF, "7:0", V, "7:0"); break;
+				case 0b110: SET_BITS(_chrBankG, "7:0", V, "7:0"); break;
+				case 0b111: SET_BITS(_chrBankH, "7:0", V, "7:0"); break;
+				}
 			break;
 		case 0b10: break;
 		case 0b11: _mirroring = V & 1; break;
 		}
-	}
+	} break;
 
-	if (_mapper == CgMapper::Taito) {
+	case CgMapper::Taito: {
 		switch (GetBits(A, "14:13,1:0")) {
 		case 0b0000:
 			SET_BITS(_prgBankA, "5:0", V, "5:0");
@@ -733,9 +783,9 @@ void Coolgirl::HandleSubMapperLogic(uint16_t addr, uint8_t value)
 			_console->GetCpu()->ClearIrqSource(IRQSource::External);
 			break;
 		}
-	}
+	} break;
 
-	if (_mapper == CgMapper::Mapper42) {
+	case CgMapper::Mapper42: {
 		switch (GetBits(A, "14,1:0")) {
 		case 0: SET_BITS(_chrBankA, "7:3", V, "4:0"); break;
 		case 4: SET_BITS(_prgBank6000, "3:0", V, "3:0"); break;
@@ -748,9 +798,9 @@ void Coolgirl::HandleSubMapperLogic(uint16_t addr, uint8_t value)
 			}
 			break;
 		}
-	}
+	} break;
 
-	if (_mapper == CgMapper::VRC2_VRC4) {
+	case CgMapper::VRC2_VRC4: {
 		uint8_t vrc2bHi =
 			(_flags & 5) == 0 ? (GetBits(A, "7") | GetBits(A, "2")) :
 			(_flags & 5) == 1 ? GetBits(A, "0") :
@@ -811,9 +861,9 @@ void Coolgirl::HandleSubMapperLogic(uint16_t addr, uint8_t value)
 				break;
 			}
 		}
-	}
+	} break;
 
-	if (_mapper == CgMapper::FME7) {
+	case CgMapper::FME7: {
 		if (GetBits(A, "14:13") == 0b00) SET_BITS(_mapper69Internal, "3:0", V, "3:0");
 		if (GetBits(A, "14:13") == 0b01) {
 			switch (GetBits(_mapper69Internal, "3:0")) {
@@ -843,9 +893,9 @@ void Coolgirl::HandleSubMapperLogic(uint16_t addr, uint8_t value)
 			case 0b1111: SET_BITS(_mapper69IrqValue, "15:8", V, "7:0"); break;
 			}
 		}
-	}
+	} break;
 
-	if (_mapper == CgMapper::IremG101) {
+	case CgMapper::IremG101: {
 		switch (GetBits(A, "14:12")) {
 		case 0b000: SET_BITS(_prgBankA, "5:0", V, "5:0"); break;
 		case 0b001:
@@ -866,36 +916,36 @@ void Coolgirl::HandleSubMapperLogic(uint16_t addr, uint8_t value)
 			}
 			break;
 		}
-	}
+	} break;
 
-	if (_mapper == CgMapper::Mapper36) {
+	case CgMapper::Mapper36: {
 		if (GetBits(A, "14:1") != 0b11111111111111) {
 			SET_BITS(_prgBankA, "5:2", V, "7:4");
 			SET_BITS(_chrBankA, "6:3", V, "3:0");
 		}
-	}
+	} break;
 
-	if (_mapper == CgMapper::Mapper70) {
+	case CgMapper::Mapper70: {
 		SET_BITS(_prgBankA, "4:1", V, "7:4");
 		SET_BITS(_chrBankA, "6:3", V, "3:0");
-	}
+	} break;
 
-	if (_mapper == CgMapper::Mapper184) {
+	case CgMapper::Mapper184: {
 		if (GetBits(A, "14:13") == 0b11) {
 			SET_BITS(_chrBankA, "4:2", V, "2:0");
 			SET_BITS(_chrBankE, "3:2", V, "5:4");
 			SET_BITS(_chrBankE, "4", 1, "0");
 		}
-	}
+	} break;
 
-	if (_mapper == CgMapper::Mapper38) {
+	case CgMapper::Mapper38: {
 		if (GetBits(A, "14:12") == 0b111) {
 			SET_BITS(_prgBankA, "3:2", V, "1:0");
 			SET_BITS(_chrBankA, "4:3", V, "3:2");
 		}
-	}
+	} break;
 
-	if (_mapper == CgMapper::VRC1) {
+	case CgMapper::VRC1: {
 		switch (GetBits(A, "14:12")) {
 		case 0b000: SET_BITS(_prgBankA, "3:0", V, "3:0"); break;
 		case 0b001:
@@ -908,9 +958,9 @@ void Coolgirl::HandleSubMapperLogic(uint16_t addr, uint8_t value)
 		case 0b110: SET_BITS(_chrBankA, "5:2", V, "3:0"); break;
 		case 0b111: SET_BITS(_chrBankE, "5:2", V, "3:0"); break;
 		}
-	}
+	} break;
 
-	if (_mapper == CgMapper::ConyYoko) {
+	case CgMapper::ConyYoko: {
 		switch (GetBits(A, "9:8")) {
 		case 0b00: SET_BITS(_prgBankA, "4:1", V, "3:0"); break;
 		case 0b01:
@@ -959,9 +1009,9 @@ void Coolgirl::HandleSubMapperLogic(uint16_t addr, uint8_t value)
 			}
 			break;
 		}
-	}
+	} break;
 
-	if (_mapper == CgMapper::Sunsoft3) {
+	case CgMapper::Sunsoft3: {
 		if (GetBits(A, "11")) {
 			switch (GetBits(A, "14:12")) {
 			case 0b000: SET_BITS(_chrBankA, "6:1", V, "5:0"); break;
@@ -983,13 +1033,16 @@ void Coolgirl::HandleSubMapperLogic(uint16_t addr, uint8_t value)
 		} else {
 			_console->GetCpu()->ClearIrqSource(IRQSource::External);
 		}
-	}
+	} break;
 
-	if (_mapper == CgMapper::Sunsoft2On3) {
+	case CgMapper::Sunsoft2On3: {
 		SET_BITS(_prgBankA, "3:1", V, "6:4");
 		SET_BITS(_chrBankA, "6:3", V, "7,2:0");
 		SET_BITS(_mirroring, "1", 1, "0");
 		SET_BITS(_mirroring, "0", V, "3");
+	} break;
+
+	default: break;
 	}
 
 	Sync();
@@ -1035,15 +1088,37 @@ void Coolgirl::WriteRegister(uint16_t addr, uint8_t value)
 		case 6:
 			SET_BITS(_flags, "2:0", value, "7:5");
 			_mapper = (CgMapper)SetBits((uint32_t)_mapper, "4:0", GetBits(value, "4:0"));
+			UpdateIrqHandler();
+#ifdef _DEBUG
+			needLogSyncChr = true;
+#endif
 			break;
 		case 7:
 			SET_BITS(_lockout, "0", value, "7");
 			_mapper = (CgMapper)SetBits((uint32_t)_mapper, "5", GetBits(value, "6"));
+			UpdateIrqHandler();
 			SET_BITS(_fourScreen, "0", value, "5");
 			SET_BITS(_mirroring, "1:0", value, "4:3");
 			SET_BITS(_canWriteFlash, "0", value, "2");
 			SET_BITS(_canWriteChr, "0", value, "1");
 			SET_BITS(_sramEnabled, "0", value, "0");
+#ifdef _DEBUG
+			needLogSyncChr = true;
+			if (_canWriteChr != _dbgPrevCanWriteChr) {
+				std::stringstream ss;
+				ss << "[Coolgirl] $5007 write: canWriteChr " << (int)_dbgPrevCanWriteChr
+				   << "->" << (int)_canWriteChr
+				   << " val=0x" << std::hex << (int)value << std::dec
+				   << " mapper=" << (int)_mapper;
+				LogDebug(ss.str());
+				if (_canWriteChr) {
+					_dbgChrWriteActive = true;
+					_dbgChrWriteCount = 0;
+					_dbgChrWriteFirstAddr = 0xFFFF;
+				}
+				_dbgPrevCanWriteChr = _canWriteChr;
+			}
+#endif
 			if (_mapper == CgMapper::MMC2_MMC4) _prgBankB = (uint8_t)~2;
 			if (_mapper == CgMapper::Mapper42) _mapRomOn6000 = 1;
 			if (_mapper == CgMapper::H3001) _prgBankB = 1;
@@ -1078,12 +1153,6 @@ void Coolgirl::WriteRegister(uint16_t addr, uint8_t value)
 					case 1: _mapper163R3 = value; break;
 					}
 				}
-			}
-		}
-
-		if (_mapper == CgMapper::Mapper87) {
-			if (GetBits(addr, "14:13") == 0b11) {
-				SET_BITS(_chrBankA, "4:3", value, "0,1");
 			}
 		}
 
@@ -1216,21 +1285,15 @@ void Coolgirl::InitMapper()
 	AddRegisterRange(0x4020, 0x4FFF, MemoryOperation::Any);
 	AddRegisterRange(0x6000, 0x7FFF, MemoryOperation::Any);
 
-	_chrSize = _chrRomSize > 0 ? _chrRomSize : std::max(_chrRamSize, (uint32_t)GetChrRamSize());
-	_wramSize = 32 * 1024;
-	_wram.resize(_wramSize, 0);
-
 	if (_chrRomSize == 0 && _chrRamSize < GetChrRamSize()) {
 		InitializeChrRam(GetChrRamSize());
 	}
 
+	/*_wram.resize(32 * 1024, 0);
+
 	if (HasBattery()) {
 		_saveFlash.resize(SAVE_FLASH_SIZE, 0xFF);
-		_cfiData.resize(sizeof(cfi_data) * 2);
-		for (size_t i = 0; i < sizeof(cfi_data); i++) {
-			_cfiData[i * 2] = _cfiData[i * 2 + 1] = cfi_data[i];
-		}
-	}
+	}*/
 
 	_orgPrgRom = vector<uint8_t>(_prgRom, _prgRom + _prgSize);
 
@@ -1269,7 +1332,6 @@ void Coolgirl::Reset(bool softReset)
 	_chrBankH = 7;
 	_ppuLatch0 = 0;
 	_ppuLatch1 = 0;
-	_lreset = 0;
 	_mmc1LoadRegister = 0;
 	_mmc3Internal = 0;
 	_mapper69Internal = 0;
@@ -1320,7 +1382,72 @@ void Coolgirl::Reset(bool softReset)
 	_cfiMode = 0;
 	_writeDelay = 0;
 
+	needLogSyncPrg = true;
+	needLogSyncChr = true;
+
+	UpdateIrqHandler();
 	Sync();
+
+#ifdef _DEBUG
+	_dbgResetCount++;
+	_dbgChrWriteActive = false;
+	_dbgChrWriteCount = 0;
+	_dbgChrWriteFirstAddr = 0xFFFF;
+	_dbgPrevCanWriteChr = _canWriteChr;
+	std::stringstream ss;
+	ss << "[Coolgirl] Reset#" << (int)_dbgResetCount << " done: mapper=" << (int)_mapper
+	   << " prgMode=" << (int)_prgMode << " chrMode=" << (int)_chrMode
+	   << " canWriteChr=" << (int)_canWriteChr
+	   << " prgBase=0x" << std::hex << _prgBase << std::dec
+	   << " prgBankA=" << (int)_prgBankA << " prgBankB=" << (int)_prgBankB
+	   << " prgBankC=" << (int)_prgBankC << " prgBankD=" << (int)_prgBankD
+	   << " chrBankA=" << (int)_chrBankA;
+	LogDebug(ss.str());
+#endif
+}
+
+void Coolgirl::MapperWriteVram(uint16_t addr, uint8_t value)
+{
+#ifdef _DEBUG
+	if (addr < 0x2000) {
+		if (_dbgChrWriteActive) {
+			_dbgChrWriteCount++;
+			if (_dbgChrWriteCount == 1) {
+				_dbgChrWriteFirstAddr = addr;
+				_dbgChrWriteFirstVal = value;
+				std::stringstream ss;
+				ss << "[Coolgirl] CHR RAM 1st write: ppuAddr=$"
+				   << std::hex << std::setfill('0') << std::setw(4) << addr
+				   << " val=$" << std::setw(2) << (int)value << std::dec
+				   << " canWriteChr=" << (int)_canWriteChr
+				   << " chrMode=" << (int)_chrMode
+				   << " mapper=" << (int)_mapper;
+				LogDebug(ss.str());
+			}
+			if (_dbgChrWriteCount == 8192) {
+				std::stringstream ss;
+				ss << "[Coolgirl] CHR RAM 8KB done: lastAddr=$"
+				   << std::hex << std::setfill('0') << std::setw(4) << addr
+				   << " val=$" << std::setw(2) << (int)value << std::dec
+				   << " canWriteChr=" << (int)_canWriteChr;
+				LogDebug(ss.str());
+				_dbgChrWriteActive = false;
+			}
+		} else if (!_canWriteChr && _dbgResetCount > 0) {
+			static uint32_t suppressCount = 0;
+			suppressCount++;
+			if (suppressCount <= 3) {
+				std::stringstream ss;
+				ss << "[Coolgirl] CHR write when canWriteChr=0! ppuAddr=$"
+				   << std::hex << std::setfill('0') << std::setw(4) << addr
+				   << " val=$" << std::setw(2) << (int)value << std::dec
+				   << " mapper=" << (int)_mapper;
+				LogDebug(ss.str());
+			}
+		}
+	}
+#endif
+	InternalWriteVram(addr, value);
 }
 
 void Coolgirl::SaveBattery()
@@ -1328,17 +1455,17 @@ void Coolgirl::SaveBattery()
 	if (!HasBattery()) return;
 	if (_console->GetNesConfig().DisableFlashSaves) return;
 
-	// 保存 WRAM 到 .sram 文件
+	// save WRAM to .sram
 	if (_wram.size() > 0) {
 		_emu->GetBatteryManager()->SaveBattery(".sram", _wram.data(), (uint32_t)_wram.size());
 	}
 
-	// 保存 Flash 到 .fla 文件
+	// save Flash to .fla
 	if (_saveFlash.size() > 0) {
 		_emu->GetBatteryManager()->SaveBattery(".fla", _saveFlash.data(), (uint32_t)_saveFlash.size());
 	}
 
-	// 保留 IPS 保存作为兼容
+	// save IPS patch for compatibility
 	SaveRom(_orgPrgRom);
 }
 
@@ -1347,27 +1474,47 @@ void Coolgirl::LoadBattery()
 	if (!HasBattery()) return;
 	if (_console->GetNesConfig().DisableFlashSaves) return;
 
-	// 加载 WRAM
-	if (_wram.size() > 0) {
+	// load WRAM from .sram
+	//if (_wram.size() > 0) {
+		_wram.resize(32 * 1024, 0);
 		_emu->GetBatteryManager()->LoadBattery(".sram", _wram.data(), (uint32_t)_wram.size());
-	}
+	//}
 
-	// 加载 Flash
-	if (_saveFlash.size() > 0) {
+	// load Flash from .fla
+	//if (_saveFlash.size() > 0) {
+		_saveFlash.resize(SAVE_FLASH_SIZE, 0xFF);
 		_emu->GetBatteryManager()->LoadBattery(".fla", _saveFlash.data(), (uint32_t)_saveFlash.size());
+	//}
+
+	// load IPS patch for compatibility
+	LoadRomPatch(_orgPrgRom);
+}
+
+void Coolgirl::SerializeFlashDiff(Serializer& s)
+{
+	if(s.GetFormat() != SerializeFormat::Binary) {
+		return;
 	}
 
-	// 保留 IPS 加载作为兼容
-	LoadRomPatch(_orgPrgRom);
+	if(s.IsSaving()) {
+		vector<uint8_t> diff = IpsPatcher::CreatePatchFrom0xFF(_saveFlash);
+		SVVector(diff);
+	} else {
+		vector<uint8_t> diff;
+		SVVector(diff);
+		vector<uint8_t> patched;
+		if(IpsPatcher::PatchBufferAgainst0xFF(diff, SAVE_FLASH_SIZE, patched)) {
+			_saveFlash = std::move(patched);
+		}
+	}
 }
 
 void Coolgirl::Serialize(Serializer& s)
 {
 	BaseMapper::Serialize(s);
 
-	SV(_wram);
-	SV(_saveFlash);
-	SV(_cfiData);
+	//SV(_wram);
+	//SerializeFlashDiff(s);
 
 	SV(_sramEnabled); SV(_sramPage); SV(_canWriteChr); SV(_mapRomOn6000);
 	SV(_flags); SV(_mapper); SV(_canWriteFlash); SV(_mirroring); SV(_fourScreen); SV(_lockout);
@@ -1379,7 +1526,7 @@ void Coolgirl::Serialize(Serializer& s)
 	SV(_tksMir[0]); SV(_tksMir[1]); SV(_tksMir[2]); SV(_tksMir[3]);
 	SV(_tksMir[4]); SV(_tksMir[5]); SV(_tksMir[6]); SV(_tksMir[7]);
 	SV(_a12Watcher);
-	SV(_ppuLatch0); SV(_ppuLatch1); SV(_lreset);
+	SV(_ppuLatch0); SV(_ppuLatch1);
 	SV(_mmc1LoadRegister); SV(_mmc3Internal); SV(_mapper69Internal); SV(_mapper112Internal);
 	SV(_mapper163Latch);
 	SV(_mapper163R0); SV(_mapper163R1); SV(_mapper163R2); SV(_mapper163R3);
@@ -1405,13 +1552,28 @@ void Coolgirl::Serialize(Serializer& s)
 	SV(_cfiMode);
 	SV(_writeDelay);
 
-	SerializeRomDiff(s, _orgPrgRom);
+	if(!s.IsSaving()) {
+		UpdateIrqHandler();
+	}
 }
 
-void Coolgirl::ProcessCpuClock()
+void Coolgirl::UpdateIrqHandler()
 {
-	_writeDelay = 0;
+	switch (_mapper) {
+	case CgMapper::VRC2_VRC4: _irqHandler = &Coolgirl::ProcessVrc4Irq; break;
+	case CgMapper::VRC3: _irqHandler = &Coolgirl::ProcessVrc3Irq; break;
+	case CgMapper::FME7: _irqHandler = &Coolgirl::ProcessFme7Irq; break;
+	case CgMapper::SS88006: _irqHandler = &Coolgirl::ProcessSs88006Irq; break;
+	case CgMapper::H3001: _irqHandler = &Coolgirl::ProcessH3001Irq; break;
+	case CgMapper::Mapper42: _irqHandler = &Coolgirl::ProcessMapper42Irq; break;
+	case CgMapper::ConyYoko: _irqHandler = &Coolgirl::ProcessConyYokoIrq; break;
+	case CgMapper::Sunsoft3: _irqHandler = &Coolgirl::ProcessSunsoft3Irq; break;
+	default: _irqHandler = nullptr; break;
+	}
+}
 
+void Coolgirl::ProcessVrc4Irq()
+{
 	if (_vrc4IrqControl & 2) {
 		_vrc4IrqPrescaler++;
 		if ((!( _vrc4IrqPrescalerCounter & 2) && _vrc4IrqPrescaler == 114) ||
@@ -1426,7 +1588,10 @@ void Coolgirl::ProcessCpuClock()
 			}
 		}
 	}
+}
 
+void Coolgirl::ProcessVrc3Irq()
+{
 	if (_vrc3IrqControl & 2) {
 		if (_vrc3IrqControl & 4) {
 			_vrc3IrqValue = (_vrc3IrqValue & 0xFF00) | ((_vrc3IrqValue + 1) & 0xFF);
@@ -1442,13 +1607,19 @@ void Coolgirl::ProcessCpuClock()
 			}
 		}
 	}
+}
 
+void Coolgirl::ProcessFme7Irq()
+{
 	if (_mapper69CounterEnabled) {
 		_mapper69IrqValue--;
 		if (_mapper69IrqValue == 0xFFFF)
 			_console->GetCpu()->SetIrqSource(IRQSource::External);
 	}
+}
 
+void Coolgirl::ProcessSs88006Irq()
+{
 	if (_mapper18IrqControl & 1) {
 		uint8_t carry = (_mapper18IrqValue & 0x0F) - 1;
 		_mapper18IrqValue = (_mapper18IrqValue & 0xFFF0) | (carry & 0x0F);
@@ -1471,7 +1642,10 @@ void Coolgirl::ProcessCpuClock()
 		if (carry)
 			_console->GetCpu()->SetIrqSource(IRQSource::External);
 	}
+}
 
+void Coolgirl::ProcessH3001Irq()
+{
 	if (_mapper65IrqEnabled) {
 		if (_mapper65IrqValue != 0) {
 			_mapper65IrqValue--;
@@ -1479,7 +1653,10 @@ void Coolgirl::ProcessCpuClock()
 				_console->GetCpu()->SetIrqSource(IRQSource::External);
 		}
 	}
+}
 
+void Coolgirl::ProcessMapper42Irq()
+{
 	if (_mapper42IrqEnabled) {
 		_mapper42IrqValue++;
 		if (_mapper42IrqValue >> 15) _mapper42IrqValue = 0;
@@ -1488,13 +1665,19 @@ void Coolgirl::ProcessCpuClock()
 		else
 			_console->GetCpu()->ClearIrqSource(IRQSource::External);
 	}
+}
 
+void Coolgirl::ProcessConyYokoIrq()
+{
 	if (_mapper83IrqEnabled) {
 		if (_mapper83IrqCounter == 0)
 			_console->GetCpu()->SetIrqSource(IRQSource::External);
 		_mapper83IrqCounter--;
 	}
+}
 
+void Coolgirl::ProcessSunsoft3Irq()
+{
 	if (_mapper67IrqEnabled) {
 		_mapper67IrqCounter--;
 		if (_mapper67IrqCounter == 0xFFFF) {
@@ -1504,24 +1687,41 @@ void Coolgirl::ProcessCpuClock()
 	}
 }
 
+void Coolgirl::ProcessCpuClock()
+{
+	_writeDelay=0;
+
+	if (_irqHandler) {
+		(this->*_irqHandler)();
+	}
+}
+
 void Coolgirl::NotifyVramAddressChange(uint16_t addr)
 {
-	if (_mapper == CgMapper::MMC2_MMC4) {
+	switch (_mapper) {
+	case CgMapper::MMC2_MMC4:
 		if ((addr >> 4) == 0xFD) { _ppuLatch0 = 0; SyncChr(); }
 		if ((addr >> 4) == 0xFE) { _ppuLatch0 = 1; SyncChr(); }
 		if ((addr >> 4) == 0x1FD) { _ppuLatch1 = 0; SyncChr(); }
 		if ((addr >> 4) == 0x1FE) { _ppuLatch1 = 1; SyncChr(); }
-	}
+		break;
 
-	if (_mapper == CgMapper::MMC3_MMC6) {
-		A12StateChange change = _a12Watcher.UpdateVramAddress(addr, _console->GetMasterClock());
-		if (change == A12StateChange::Rise) {
-			ProcessScanlineCounter();
+	case CgMapper::MMC3_MMC6:
+	case CgMapper::JY:
+	case CgMapper::Taito:
+		{
+			A12StateChange change = _a12Watcher.UpdateVramAddress(addr, _console->GetMasterClock());
+			if (change == A12StateChange::Rise) {
+				ProcessScanlineCounter();
+			}
+			if (_mapper == CgMapper::MMC3_MMC6 && (_flags & 1)) {
+				SetMirroringType((_tksMir[(addr & 0x1FFF) >> 10] >> 7) ? MirroringType::ScreenBOnly : MirroringType::ScreenAOnly);
+			}
 		}
-	}
+		break;
 
-	if (_mapper == CgMapper::MMC3_MMC6 && (_flags & 1)) {
-		SetMirroringType((_tksMir[(addr & 0x1FFF) >> 10] >> 7) ? MirroringType::ScreenBOnly : MirroringType::ScreenAOnly);
+	default:
+		break;
 	}
 }
 

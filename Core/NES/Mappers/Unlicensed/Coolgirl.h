@@ -54,16 +54,23 @@ class Coolgirl : public BaseMapper
 private:
 	static const uint32_t SAVE_FLASH_SIZE = 1024 * 1024 * 8;
 	static const uint32_t FLASH_SECTOR_SIZE = 128 * 1024;
-	static const int ROM_CHIP = 0x00;
-	static const int WRAM_CHIP = 0x10;
-	static const int FLASH_CHIP = 0x11;
-	static const int CFI_CHIP = 0x13;
 
-	uint32_t _chrSize = 0;
-	uint32_t _wramSize = 0;
+	struct BitSpecEntry {
+		const char* key;
+		bool isContiguous;
+		int shift;
+		uint32_t mask;
+		uint32_t posMask;
+		int bits[32];
+		uint8_t count;
+	};
+
+	BitSpecEntry _bitCache[64] = {};
+	int _bitCacheCount = 0;
+	BitSpecEntry* GetBitSpec(const char* bitsStr);
+
 	vector<uint8_t> _wram;
 	vector<uint8_t> _saveFlash;
-	vector<uint8_t> _cfiData;
 
 	uint8_t _sramEnabled = 0;
 	uint8_t _sramPage = 0;
@@ -106,7 +113,6 @@ private:
 
 	uint8_t _ppuLatch0 = 0;
 	uint8_t _ppuLatch1 = 0;
-	uint64_t _lreset = 0;
 	uint8_t _mmc1LoadRegister = 0;
 	uint8_t _mmc3Internal = 0;
 	uint8_t _mapper69Internal = 0;
@@ -166,14 +172,31 @@ private:
 
 	A12Watcher _a12Watcher;
 
-	// Bit manipulation functions (like FCEUX)
-	static uint8_t StringToBits(const char* bitsStr, int* bits);
-	static uint32_t GetBits(uint32_t value, const char* bitsStr);
-	static uint32_t SetBits(uint32_t value, const char* bitsStr, uint32_t newValue);
+	typedef void (Coolgirl::*IrqHandler)();
+	IrqHandler _irqHandler = nullptr;
+	void UpdateIrqHandler();
+	void ProcessVrc4Irq();
+	void ProcessVrc3Irq();
+	void ProcessFme7Irq();
+	void ProcessSs88006Irq();
+	void ProcessH3001Irq();
+	void ProcessMapper42Irq();
+	void ProcessConyYokoIrq();
+	void ProcessSunsoft3Irq();
 
-	// Macros for cleaner code (like FCEUX's SET_BITS/GET_BITS)
-	#define GET_BITS(value, bitsStr) GetBits(value, bitsStr)
-	#define SET_BITS(target, target_bits, source, source_bits) target = SetBits(target, target_bits, GetBits(source, source_bits))
+	// Bit manipulation functions (like FCEUX)
+	uint32_t GetBits(uint32_t value, const char* bitsStr);
+	uint32_t SetBits(uint32_t value, const char* bitsStr, uint32_t newValue);
+
+	bool needLogSyncPrg = false;
+	bool needLogSyncChr = false;
+
+	uint8_t _dbgResetCount = 0;
+	bool _dbgChrWriteActive = false;
+	uint32_t _dbgChrWriteCount = 0;
+	uint16_t _dbgChrWriteFirstAddr = 0xFFFF;
+	uint8_t _dbgChrWriteFirstVal = 0;
+	uint8_t _dbgPrevCanWriteChr = 0;
 
 	void SyncPrg();
 	void SyncChr();
@@ -181,9 +204,11 @@ private:
 	void Sync();
 	void FlashWrite(uint16_t addr, uint8_t value);
 	void HandleSubMapperLogic(uint16_t addr, uint8_t value);
-	void ProcessCpuIrq();
+	//void ProcessCpuIrq();
 	void ProcessScanlineCounter();
-	uint16_t ApplyChrMask(uint16_t bank);
+	static uint16_t ApplyChrMask(uint32_t chrMask, uint16_t bank);
+	void MapPrgBank(uint16_t start, uint16_t end, uint32_t mappedBank);
+	void SerializeFlashDiff(Serializer& s);
 
 protected:
 	uint16_t GetPrgPageSize() override { return 0x2000; }
@@ -206,6 +231,7 @@ protected:
 	void NotifyVramAddressChange(uint16_t addr) override;
 	void SaveBattery() override;
 	void LoadBattery() override;
+	void MapperWriteVram(uint16_t addr, uint8_t value) override;
 
 public:
 	Coolgirl();
