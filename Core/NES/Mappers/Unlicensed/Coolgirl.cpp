@@ -242,7 +242,7 @@ void Coolgirl::SyncChr()
 	switch (_chrMode & 7) {
 	default:
 	case 0:
-		SelectChrPage8x(0, _chrBankA >> 3 << 3 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam); break;
+		SelectChrPage8x(0, bankA >> 3 << 3 >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam); break;
 	case 1:
 		SelectChrPage4x(0, _mapper163Latch >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
 		SelectChrPage4x(1, _mapper163Latch >> chrShiftRight << chrShiftLeft, ChrMemoryType::ChrRam);
