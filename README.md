@@ -1,6 +1,8 @@
-# Mesen
+# Mesen-cgmod
 
 Mesen is a multi-system emulator (NES, SNES, Game Boy, Game Boy Advance, PC Engine, SMS/Game Gear, WonderSwan) for Windows, Linux and macOS.  
+
+add Coolgirl support.
 
 ## Releases
 
