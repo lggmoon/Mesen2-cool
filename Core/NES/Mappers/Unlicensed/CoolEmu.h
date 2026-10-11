@@ -11,7 +11,8 @@
 class CoolEmu : public BaseMapper
 {
 private:
-	enum class Mode : uint8_t {
+	enum class Mode : uint8_t
+	{
 		Menu = 0,
 		GameConfig = 1,
 		GameRunning = 2
@@ -46,19 +47,92 @@ private:
 	string GetGameFileName();
 
 protected:
-	uint32_t GetNametableCount() override { return 4; }
-	uint16_t GetPrgPageSize() override { return 0x2000; }
-	uint16_t GetChrPageSize() override { return 0x0400; }
-	uint32_t GetChrRamSize() override { return 512 * 1024; }
-	uint32_t GetSaveRamSize() override { return 0; }
-	uint16_t RegisterStartAddress() override { return 0x5000; }
-	uint16_t RegisterEndAddress() override { return 0x5FFF; }
-	bool AllowRegisterRead() override { return true; }
-	bool EnableCpuClockHook() override { return true; }
-	bool EnableVramAddressHook() override { return true; }
-	bool EnableCustomVramRead() override { return true; }
+	uint32_t GetNametableCount() override
+	{
+		if(_mode == Mode::GameRunning && _nativeMapper) {
+			return _nativeMapper->GetNametableCount();
+		}
+		return 2;
+	}
+	uint16_t GetPrgPageSize() override
+	{
+		if(_mode == Mode::GameRunning && _nativeMapper) {
+			return _nativeMapper->GetPrgPageSize();
+		}
+		return 0x2000;
+	}
+	uint16_t GetChrPageSize() override
+	{
+		if(_mode == Mode::GameRunning && _nativeMapper) {
+			return _nativeMapper->GetChrPageSize();
+		}
+		return 0x0400;
+	}
+	uint32_t GetChrRamSize() override
+	{
+		if(_mode == Mode::GameRunning && _nativeMapper) {
+			return _nativeMapper->GetChrRamSize();
+		}
+		return 512 * 1024;
+	}
+	uint32_t GetSaveRamSize() override
+	{
+		if(_mode == Mode::GameRunning && _nativeMapper) {
+			return _nativeMapper->GetSaveRamSize();
+		}
+		return 0x2000;
+	}
+	uint32_t GetSaveRamPageSize() override
+	{
+		if(_mode == Mode::GameRunning && _nativeMapper) {
+			return _nativeMapper->GetSaveRamPageSize();
+		}
+		return 0x2000;
+	}
+	uint16_t RegisterStartAddress() override
+	{
+		if(_mode == Mode::GameRunning && _nativeMapper) {
+			return _nativeMapper->RegisterStartAddress();
+		}
+		return 0x5000;
+	}
+	uint16_t RegisterEndAddress() override
+	{
+		if(_mode == Mode::GameRunning && _nativeMapper) {
+			return _nativeMapper->RegisterEndAddress();
+		}
+		return 0x5FFF;
+	}
+	bool AllowRegisterRead() override
+	{
+		if(_mode == Mode::GameRunning && _nativeMapper) {
+			return _nativeMapper->AllowRegisterRead();
+		}
+		return true;
+	}
+	bool EnableCpuClockHook() override
+	{
+		if(_mode == Mode::GameRunning && _nativeMapper) {
+			return _nativeMapper->EnableCpuClockHook();
+		}
+		return true;
+	}
+	bool EnableVramAddressHook() override
+	{
+		if(_mode == Mode::GameRunning && _nativeMapper) {
+			return _nativeMapper->EnableVramAddressHook();
+		}
+		return true;
+	}
+	bool EnableCustomVramRead() override
+	{
+		if(_mode == Mode::GameRunning && _nativeMapper) {
+			return _nativeMapper->EnableCustomVramRead();
+		}
+		return true;
+	}
 
-	void InitMapper() override;	
+	void InitMapper() override;
 	void InterReset();
 	void Reset(bool softReset) override;
 	void WriteRegister(uint16_t addr, uint8_t value) override;
@@ -70,9 +144,12 @@ protected:
 	void MapperWriteVram(uint16_t addr, uint8_t value) override;
 	void SaveBattery() override;
 	void LoadBattery() override;
-	bool HasBattery() override;	
+	bool HasBattery() override;
 	void GetMemoryRanges(MemoryRanges& ranges) override;
 	vector<MapperStateEntry> GetMapperStateEntries() override;
+
+	void _AddRegisterRanges();
+	void _RemoveRegisterRanges();
 
 public:
 	CoolEmu();

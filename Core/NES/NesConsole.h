@@ -53,7 +53,9 @@ private:
 
 	bool _nextFrameOverclockDisabled = false;
 	
+public:
 	void UpdateRegion(bool forceUpdate = false);
+private:
 	void LoadHdPack(VirtualFile& romFile);
 	
 	void InitializeInputDevices(GameInputType inputType, GameSystem system);
@@ -92,6 +94,7 @@ public:
 	void Serialize(Serializer& s) override;
 	void Reset() override;
 	LoadRomResult LoadRom(VirtualFile& romFile) override;
+	LoadRomResult LoadRom(unique_ptr<BaseMapper>& nativeMapper, VirtualFile& romFile);
 	void RunFrame() override;
 	BaseControlManager* GetControlManager() override;
 	double GetFps() override;

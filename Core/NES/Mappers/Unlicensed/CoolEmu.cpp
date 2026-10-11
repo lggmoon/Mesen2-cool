@@ -6,7 +6,13 @@
 #include "NES/BaseNesPpu.h"
 #include "NES/MapperFactory.h"
 #include "Shared/MessageManager.h"
+#include "Shared/BaseControlManager.h"
 #include "Utilities/FolderUtilities.h"
+#include "NES/NesSoundMixer.h"
+#include "NES/NesControlManager.h"
+#include "NES/APU/NesApu.h"
+#include "NES/DefaultNesPpu.h"
+
 
 CoolEmu::CoolEmu()
 {
@@ -52,7 +58,8 @@ void CoolEmu::MenuModeSync()
 		SelectChrPage8x(0, _menuChrBank, ChrMemoryType::ChrRam);
 	}
 
-	if (!(_menuConfig & 0x02)) {
+	bool mirroringVertical = (_menuConfig & 0x02) != 0;
+	if (mirroringVertical) {
 		SetMirroringType(MirroringType::Vertical);
 	} else {
 		SetMirroringType(MirroringType::Horizontal);
@@ -61,57 +68,76 @@ void CoolEmu::MenuModeSync()
 
 void CoolEmu::ActivateGame()
 {
-	string batteryRomName = GetGameFileName();
-	_emu->GetBatteryManager()->Initialize(batteryRomName, true);
-
-	size_t dataSize = _gameSize * 1024;
-	uint8_t* pData = _prgRom + _gameOffset * 1024;
-	VirtualFile gameFile(pData, dataSize, batteryRomName +".nes");
-	RomData romData;
-	LoadRomResult result = LoadRomResult::UnknownType;
-	auto mapper = MapperFactory::InitializeFromFile(_console, gameFile, romData, result);
-	if(!mapper) {
-		MessageManager::Log("[CoolEmu] Failed to create native mapper!");
-		RestoreMenuMode();
-		return;
-	}
-	_nativeMapper.swap(mapper);
-
-	auto romInfo = _nativeMapper->GetRomInfo();
-	MessageManager::Log("[CoolEmu] Activating native mapper: " + std::to_string(romInfo.MapperID) + "." + std::to_string(romInfo.SubMapperID));
-	MessageManager::Log("[CoolEmu] Game offset: 0x" + std::to_string(_gameOffset) + "KB");
-	MessageManager::Log("[CoolEmu] Game size: 0x" + std::to_string(_gameSize) + "KB");
-	MessageManager::Log("[CoolEmu] Game idx: " + std::to_string(_gameIdx));
-
-	RemoveRegisterRange(0x5000, 0x5FFF, MemoryOperation::Any);
-	RemoveRegisterRange(0x6000, 0x7FFF, MemoryOperation::Any);
-	RemoveRegisterRange(0x8000, 0xFFFF, MemoryOperation::Any);
-		
-	_nativeMapper->InitSpecificMapper(romData);
+	_RemoveRegisterRanges();
 
 	auto memoryManager = _console->GetMemoryManager();
 	memoryManager->UnregisterIODevice(this);
 
-	if(_nativeMapper->GetEpsm()) {
-		memoryManager->RegisterIODevice(reinterpret_cast<INesMemoryHandler*>(_nativeMapper->GetEpsm()));
-	}
-	memoryManager->RegisterIODevice(_nativeMapper.get());	
-
-	_nativeMapper->Reset(true);
-	_nativeMapper->OnAfterResetPowerOn();	
+	string batteryRomName = GetGameFileName();
+	_emu->GetBatteryManager()->Initialize(batteryRomName, true);
 
 	_mode = Mode::GameRunning;
-	uint16_t resetAddr = _nativeMapper->DebugReadRam(0xFFFC) |
-	                     (_nativeMapper->DebugReadRam(0xFFFD) << 8);
-	NesCpuState& cpuState = _console->GetCpu()->GetState();
-	cpuState.A = 0;
-	cpuState.X = 0;
-	cpuState.Y = 0;
-	cpuState.SP = 0xFD;
-	cpuState.PS = 0x04;
-	cpuState.NmiFlag = false;
-	cpuState.IrqFlag = 0;
-	cpuState.PC = resetAddr;
+	// create new mapper
+	// 前4个字节是原nes游戏文件的实际大小	
+	uint8_t* pData = _prgRom + _gameOffset * 1024;
+	int* pSize = (int*)pData;
+	pData += 4;
+	VirtualFile gameFile(pData, *pSize, batteryRomName +".nes");
+	//RomData romData;
+	//LoadRomResult result = LoadRomResult::UnknownType;
+
+	//auto mapper = MapperFactory::InitializeFromFile(_console, gameFile, romData, result);
+	//if(!mapper) {
+	//	MessageManager::Log("[CoolEmu] Failed to create native mapper!");
+	//	RestoreMenuMode();
+	//	return;
+	//}
+	//_mode = Mode::GameRunning;
+
+	////switch mapper
+	//_nativeMapper.swap(mapper);
+	//auto romInfo = _nativeMapper->GetRomInfo();
+	//MessageManager::Log("[CoolEmu] Activating native mapper: " + std::to_string(romInfo.MapperID) + "." + std::to_string(romInfo.SubMapperID));
+	//MessageManager::Log("[CoolEmu] Game offset: 0x" + std::to_string(_gameOffset) + "KB");
+	//MessageManager::Log("[CoolEmu] Game size: 0x" + std::to_string(_gameSize) + "KB");
+	//MessageManager::Log("[CoolEmu] Game idx: " + std::to_string(_gameIdx));
+
+	//_nativeMapper->InitSpecificMapper(romData);
+	//
+	//if(_nativeMapper->GetEpsm()) {
+	//	memoryManager->RegisterIODevice(reinterpret_cast<INesMemoryHandler*>(_nativeMapper->GetEpsm()));
+	//}
+	//memoryManager->RegisterIODevice(_nativeMapper.get());
+
+	//_console->UpdateRegion();
+	//_console->GetSoundMixer()->Reset();
+
+	//_console->GetPpu()->Reset(false);
+	//_console->GetApu()->Reset(false);
+	//_console->InitializeRam(memoryManager->GetInternalRam(), memoryManager->GetInternalRamSize());
+	//_nativeMapper->Reset(false);
+	//_console->GetControlManager()->Reset(false);
+	//_console->GetCpu()->Reset(false,_console->GetRegion());
+	//_nativeMapper->OnAfterResetPowerOn();
+
+	//uint16_t resetAddr = _nativeMapper->DebugReadRam(0xFFFC) |
+	//                     (_nativeMapper->DebugReadRam(0xFFFD) << 8);
+	//NesCpuState& cpuState = _console->GetCpu()->GetState();
+	//cpuState.A = 0;
+	//cpuState.X = 0;
+	//cpuState.Y = 0;
+	//cpuState.SP = 0xFD;
+	//cpuState.PS = 0x04;
+	//cpuState.NmiFlag = false;
+	//cpuState.IrqFlag = 0;
+	//cpuState.PC = resetAddr;
+
+	LoadRomResult result = _console->LoadRom(_nativeMapper, gameFile);
+	if(result != LoadRomResult::Success) {
+		MessageManager::Log("[CoolEmu] Failed to create native mapper!");
+		RestoreMenuMode();
+		return;
+	}
 }
 
 void CoolEmu::RestoreMenuMode()
@@ -131,9 +157,7 @@ void CoolEmu::RestoreMenuMode()
 
 	memoryManager->RegisterIODevice(this);
 
-	AddRegisterRange(0x5000, 0x5FFF, MemoryOperation::Any);
-	AddRegisterRange(0x6000, 0x7FFF, MemoryOperation::Any);
-	AddRegisterRange(0x8000, 0xFFFF, MemoryOperation::Any);
+	_AddRegisterRanges();
 
 	_mode = Mode::Menu;
 	_emu->RegisterMemory(MemoryType::NesPrgRom, _prgRom, _prgSize);
@@ -154,9 +178,7 @@ void CoolEmu::InitMapper()
 
 void CoolEmu::InterReset()
 {
-	AddRegisterRange(0x5000, 0x5FFF, MemoryOperation::Any);
-	AddRegisterRange(0x6000, 0x7FFF, MemoryOperation::Any);
-	AddRegisterRange(0x8000, 0xFFFF, MemoryOperation::Any);
+	_AddRegisterRanges();
 
 	_mode = Mode::Menu;
 	_menuPrgBank = 0;
@@ -174,6 +196,20 @@ void CoolEmu::InterReset()
 	MenuModeSync();
 }
 
+void CoolEmu::_AddRegisterRanges()
+{
+	AddRegisterRange(0x5000, 0x5FFF, MemoryOperation::Any);
+	AddRegisterRange(0x6000, 0x7FFF, MemoryOperation::Any);
+	AddRegisterRange(0x8000, 0xFFFF, MemoryOperation::Any);
+}
+
+void CoolEmu::_RemoveRegisterRanges()
+{
+	RemoveRegisterRange(0x5000, 0x5FFF, MemoryOperation::Any);
+	RemoveRegisterRange(0x6000, 0x7FFF, MemoryOperation::Any);
+	RemoveRegisterRange(0x8000, 0xFFFF, MemoryOperation::Any);
+}
+
 void CoolEmu::Reset(bool softReset)
 {
 	if (_mode == Mode::GameRunning && _nativeMapper) {
@@ -188,7 +224,7 @@ void CoolEmu::Reset(bool softReset)
 void CoolEmu::WriteRegister(uint16_t addr, uint8_t value)
 {
 	if (_mode == Mode::GameRunning && _nativeMapper) {
-		_nativeMapper->WriteRam(addr, value);
+		_nativeMapper->WriteRegister(addr, value);
 		return;
 	}
 
@@ -246,7 +282,7 @@ void CoolEmu::WriteRegister(uint16_t addr, uint8_t value)
 uint8_t CoolEmu::ReadRegister(uint16_t addr)
 {
 	if (_mode == Mode::GameRunning && _nativeMapper) {
-		return _nativeMapper->ReadRam(addr);
+		return _nativeMapper->ReadRegister(addr);
 	}
 
 	if (_mode == Mode::Menu && (_menuConfig & 0x01) && addr >= 0x6000 && addr < 0x8000 && _wram.size() > 0) {
@@ -266,28 +302,24 @@ uint8_t CoolEmu::ReadRegister(uint16_t addr)
 
 void CoolEmu::ProcessCpuClock()
 {
-	_writeDelay = 0;
-
 	if (_mode == Mode::GameRunning && _nativeMapper) {
-		if (_nativeMapper->HasCpuClockHook()) {
-			_nativeMapper->ProcessCpuClock();
-		}
+		_nativeMapper->ProcessCpuClock();
+		return;
 	}
+	_writeDelay = 0;
 }
 
 void CoolEmu::NotifyVramAddressChange(uint16_t addr)
 {
 	if (_mode == Mode::GameRunning && _nativeMapper) {
-		if (_nativeMapper->HasVramAddressHook()) {
-			_nativeMapper->NotifyVramAddressChange(addr);
-		}
+		_nativeMapper->NotifyVramAddressChange(addr);
 	}
 }
 
 uint8_t CoolEmu::MapperReadVram(uint16_t addr, MemoryOperationType operationType)
 {
 	if (_mode == Mode::GameRunning && _nativeMapper) {
-		return _nativeMapper->ReadVram(addr, operationType);
+		return _nativeMapper->MapperReadVram(addr, operationType);
 	}
 	return InternalReadVram(addr);
 }
@@ -295,7 +327,7 @@ uint8_t CoolEmu::MapperReadVram(uint16_t addr, MemoryOperationType operationType
 void CoolEmu::MapperWriteVram(uint16_t addr, uint8_t value)
 {
 	if (_mode == Mode::GameRunning && _nativeMapper) {
-		_nativeMapper->WriteVram(addr, value);
+		_nativeMapper->MapperWriteVram(addr, value);
 		return;
 	}
 	InternalWriteVram(addr, value);
@@ -327,6 +359,9 @@ void CoolEmu::LoadBattery()
 
 bool CoolEmu::HasBattery()
 {
+	if(_mode == Mode::GameRunning && _nativeMapper) {
+		return _nativeMapper->HasBattery();
+	} 
 	return true;
 }
 

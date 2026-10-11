@@ -85,7 +85,7 @@ namespace Mesen.ViewModels
 
 		private void UpdateWindowTitle()
 		{
-			string title = "Mesen(cgmod)";
+			string title = "Mesen(cool)";
 			string romName = RomInfo.GetRomName();
 			if(!string.IsNullOrWhiteSpace(romName)) {
 				title += " - " + romName;

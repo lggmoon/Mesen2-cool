@@ -142,7 +142,7 @@ LoadRomResult NesConsole::LoadRom(VirtualFile& romFile)
 	RomData romData;
 
 	LoadHdPack(romFile);
-
+	
 	LoadRomResult result = LoadRomResult::UnknownType;
 	unique_ptr<BaseMapper> mapper = MapperFactory::InitializeFromFile(this, romFile, romData, result);
 	if(mapper) {
@@ -211,6 +211,105 @@ LoadRomResult NesConsole::LoadRom(VirtualFile& romFile)
 		_mapper->OnAfterResetPowerOn();
 	}
     return result;
+}
+
+LoadRomResult NesConsole::LoadRom(unique_ptr<BaseMapper>& nativeMapper, VirtualFile& romFile)
+{
+	RomData romData;
+
+	LoadHdPack(romFile);
+
+	LoadRomResult result = LoadRomResult::UnknownType;
+	unique_ptr<BaseMapper> mapper = MapperFactory::InitializeFromFile(this, romFile, romData, result);
+	if(mapper) {
+		if(!_vsMainConsole && romData.Info.VsType == VsSystemType::VsDualSystem) {
+			//Create 2nd console (sub) dualsystem games
+			_vsSubConsole.reset(new NesConsole(_emu));
+			_vsSubConsole->_vsMainConsole = this;
+			result = _vsSubConsole->LoadRom(romFile);
+			if(result != LoadRomResult::Success) {
+				return result;
+			}
+		}
+
+		if(GetNesConfig().AutoConfigureInput && romData.Info.InputType != GameInputType::Unspecified) {
+			//Auto-configure the inputs (if option is enabled)
+			InitializeInputDevices(romData.Info.InputType, romData.Info.System);
+		}
+
+		nativeMapper.swap(mapper);
+		//_mixer.reset(new NesSoundMixer(this));
+		//_memoryManager.reset(new NesMemoryManager(this, nativeMapper.get()));
+		//_cpu.reset(new NesCpu(this));
+		//_apu.reset(new NesApu(this));
+
+		//if(romData.Info.System == GameSystem::VsSystem) {
+		//	_controlManager.reset(new VsControlManager(this));
+		//} else {
+		//	_controlManager.reset(new NesControlManager(this));
+		//}
+
+		//if(_hdData) {
+		//	_ppu.reset(new HdNesPpu(this, _hdData.get()));
+		//} else if(dynamic_cast<NsfMapper*>(nativeMapper.get())) {
+		//	//Disable most of the PPU for NSFs
+		//	_ppu.reset(new NsfPpu(this));
+		//} else {
+		//	_ppu.reset(new DefaultNesPpu(this));
+		//}
+
+		nativeMapper->InitSpecificMapper(romData);
+
+		if(nativeMapper->GetEpsm()) {
+			_memoryManager->RegisterIODevice(nativeMapper->GetEpsm());
+		}
+		_memoryManager->RegisterIODevice(_ppu.get());
+		_memoryManager->RegisterIODevice(_apu.get());
+		_memoryManager->RegisterIODevice(_controlManager.get());
+		_memoryManager->RegisterIODevice(nativeMapper.get());
+
+		if(_hdData) {
+			_hdAudioDevice.reset(new HdAudioDevice(_emu, _hdData.get()));
+			_memoryManager->RegisterIODevice(_hdAudioDevice.get());
+		} else {
+			_hdAudioDevice.reset();
+		}
+
+		ConsoleRegion region = GetNesConfig().Region;
+		if(region == ConsoleRegion::Auto) {
+			switch(nativeMapper->GetRomInfo().System) {
+				case GameSystem::NesPal: region = ConsoleRegion::Pal; break;
+				case GameSystem::Dendy: region = ConsoleRegion::Dendy; break;
+				default: region = ConsoleRegion::Ntsc; break;
+			}
+		}
+
+		if(_vsSubConsole) {
+			_vsSubConsole->UpdateRegion(false);
+		}
+
+		if(_region != region) {
+			_region = region;
+
+			_cpu->SetMasterClockDivider(_region);
+			nativeMapper->SetRegion(_region);
+			_ppu->UpdateTimings(_region);
+			_apu->SetRegion(_region);
+			_mixer->SetRegion(_region);
+		}
+
+		_mixer->Reset();
+
+		_ppu->Reset(false);
+		_apu->Reset(false);
+		InitializeRam(_memoryManager->GetInternalRam(), _memoryManager->GetInternalRamSize());
+		//_memoryManager->Reset(false);
+		nativeMapper->Reset(false);
+		_controlManager->Reset(false);
+		_cpu->Reset(false, _region);
+		nativeMapper->OnAfterResetPowerOn();
+	}
+	return result;
 }
 
 void NesConsole::LoadHdPack(VirtualFile& romFile)

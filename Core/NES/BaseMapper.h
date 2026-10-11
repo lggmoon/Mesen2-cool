@@ -85,9 +85,10 @@ protected:
 
 	virtual void InitMapper() = 0;
 	virtual void InitMapper(RomData &romData);
+public:
 	virtual uint16_t GetPrgPageSize() = 0;
 	virtual uint16_t GetChrPageSize() = 0;
-
+protected:
 	bool IsNes20();
 
 	virtual uint16_t GetChrRamPageSize() { return GetChrPageSize(); }
@@ -95,8 +96,9 @@ protected:
 	//Save ram is battery backed and saved to disk
 public:
 	virtual uint32_t GetSaveRamSize() { return 0x2000; }
-protected:
+
 	virtual uint32_t GetSaveRamPageSize() { return 0x2000; }
+
 	virtual bool ForceChrBattery() { return false; }
 	
 	virtual bool ForceSaveRamSize() { return false; }
@@ -120,14 +122,14 @@ protected:
 
 	virtual uint32_t GetDipSwitchCount() { return 0; }
 	virtual uint32_t GetNametableCount() { return 0; }
-	
+
 	virtual bool HasBusConflicts() { return false; }
 
 	uint8_t InternalReadRam(uint16_t addr);
 
 	virtual void WriteRegister(uint16_t addr, uint8_t value);
 	virtual uint8_t ReadRegister(uint16_t addr);
-
+protected:
 	void SelectPrgPage4x(uint16_t slot, uint16_t page, PrgMemoryType memoryType = PrgMemoryType::PrgRom);
 	void SelectPrgPage2x(uint16_t slot, uint16_t page, PrgMemoryType memoryType = PrgMemoryType::PrgRom);
 	virtual void SelectPrgPage(uint16_t slot, uint16_t page, PrgMemoryType memoryType = PrgMemoryType::PrgRom);

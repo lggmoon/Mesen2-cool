@@ -10,11 +10,11 @@ and Fix some bug of mapper, maby.
 
 ## Releases
 
-The latest stable version is available from the [releases on GitHub](https://github.com/lggmoon/Mesen2-cgmod/releases).
+The latest stable version is available from the [releases on GitHub](https://github.com/lggmoon/Mesen2-cool/releases).
 
 ## Development Builds
 
-[![Mesen](https://github.com/lggmoon/Mesen2-cgmod/actions/workflows/build.yml/badge.svg)](https://github.com/lggmoon/Mesen2-cgmod/actions/workflows/build.yml)
+[![Mesen](https://github.com/lggmoon/Mesen2-cool/actions/workflows/build.yml/badge.svg)](https://github.com/lggmoon/Mesen2-cool/actions/workflows/build.yml)
 
 #### <ins>Native builds</ins> (recommended) ####
 
@@ -38,7 +38,7 @@ For Linux and macOS, **SDL2** must also be installed.
 
 #### <ins>Notes</ins> ####
 
-Other builds are also available in the [Actions](https://github.com/lggmoon/Mesen2-cgmod/actions) tab.
+Other builds are also available in the [Actions](https://github.com/lggmoon/Mesen2-cool/actions) tab.
 
 **SteamOS**: See [SteamOS.md](SteamOS.md)
 

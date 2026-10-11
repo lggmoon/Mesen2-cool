@@ -59,7 +59,7 @@ jobs:
       - name: Upload Mesen
         uses: actions/upload-artifact@v4
         with:
-          name: Mesen-cgmod-win-${{ matrix.platform.targetframework }}-${{ matrix.platform.aot == true && 'aot' || 'singlefile' }}
+          name: Mesen-cool-win-${{ matrix.platform.targetframework }}-${{ matrix.platform.aot == true && 'aot' || 'singlefile' }}
           path: |
             publish/Mesen.exe
 
@@ -117,7 +117,7 @@ jobs:
       - name: Upload Mesen
         uses: actions/upload-artifact@v4
         with:
-          name: Mesen-cgmod-linux-${{ matrix.platform.os }}-${{ matrix.compiler }}
+          name: Mesen-cool-linux-${{ matrix.platform.os }}-${{ matrix.compiler }}
           path: bin/linux-${{ matrix.platform.path }}/Release/linux-${{ matrix.platform.path }}/publish/Mesen
 
   appimage:
@@ -158,7 +158,7 @@ jobs:
       - name: Upload Mesen (AppImage)
         uses: actions/upload-artifact@v4
         with:
-          name: Mesen-cgmod-linux-appimage-${{ matrix.platform.name }}
+          name: Mesen-cool-linux-appimage-${{ matrix.platform.name }}
           path: Mesen.AppImage
 
 
@@ -244,7 +244,7 @@ jobs:
       - name: Upload Mesen
         uses: actions/upload-artifact@v4
         with:
-          name: Mesen-cgmod-macos-${{ matrix.platform.arch }}-${{ matrix.compiler }}
+          name: Mesen-cool-macos-${{ matrix.platform.arch }}-${{ matrix.compiler }}
           path: bin/osx-${{ matrix.platform.arch }}/Release/Mesen.app.zip
 
   # Auto-publish release when a tag is created
@@ -261,25 +261,25 @@ jobs:
       - name: Flatten and rename files
         run: |
           cd release-assets
-          for dir in Mesen-cgmod-win-*/; do
+          for dir in Mesen-cool-win-*/; do
             artifact_name="${dir%/}"
             (cd "$dir" && zip -r "../${artifact_name}.zip" .)
           done
-          for dir in Mesen-cgmod-linux-ubuntu-*/; do
+          for dir in Mesen-cool-linux-ubuntu-*/; do
             artifact_name="${dir%/}"
             mesen_bin=$(find "$dir" -name "Mesen" -type f | head -1)
             if [ -n "$mesen_bin" ]; then
               tar czf "${artifact_name}.tar.gz" -C "$(dirname "$mesen_bin")" Mesen
             fi
           done
-          for dir in Mesen-cgmod-linux-appimage-*/; do
+          for dir in Mesen-cool-linux-appimage-*/; do
             artifact_name="${dir%/}"
             appimg=$(find "$dir" -name "Mesen.AppImage" -type f | head -1)
             if [ -n "$appimg" ]; then
               mv "$appimg" "${artifact_name}.AppImage"
             fi
           done
-          for dir in Mesen-cgmod-macos-*/; do
+          for dir in Mesen-cool-macos-*/; do
             artifact_name="${dir%/}"
             macos_zip=$(find "$dir" -name "Mesen.app.zip" -type f | head -1)
             if [ -n "$macos_zip" ]; then
